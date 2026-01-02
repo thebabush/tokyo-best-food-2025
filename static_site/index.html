@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Tokyo Best Food - Top Restaurants 2025</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            position: relative;
+        }
+
+        /* Mobile-first header */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.75rem 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .stats-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .filter-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.5rem;
+            line-height: 1;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .filter-btn:active {
+            background: rgba(255,255,255,0.3);
+        }
+
+        /* Full screen map */
+        #map {
+            position: fixed;
+            top: 56px; /* Header height */
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1;
+        }
+
+        /* Full screen filter dialog */
+        .filter-dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            z-index: 2000;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-dialog.open {
+            transform: translateX(0);
+        }
+
+        .filter-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .filter-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.5rem;
+            line-height: 1;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:active {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .filter-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem 1rem;
+        }
+
+        /* Bottom sheet for restaurant info */
+        .info-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+            z-index: 1001;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-sheet.open {
+            transform: translateY(0);
+        }
+
+        .sheet-handle {
+            width: 40px;
+            height: 4px;
+            background: #ddd;
+            border-radius: 2px;
+            margin: 12px auto 8px;
+        }
+
+        .info-header {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            position: relative;
+        }
+
+        .info-close-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: #f0f0f0;
+            border: none;
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            min-height: 32px;
+            padding: 0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+            line-height: 1;
+            color: #666;
+        }
+
+        .info-close-btn:active {
+            background: #e0e0e0;
+        }
+
+        .info-content {
+            padding: 1rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .info-name {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: #333;
+            padding-right: 40px;
+        }
+
+        .info-rating {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 0.375rem 1rem;
+            border-radius: 20px;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .info-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .info-row {
+            display: flex;
+            gap: 0.5rem;
+            line-height: 1.6;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #666;
+            min-width: 80px;
+        }
+
+        .info-value {
+            color: #333;
+            flex: 1;
+        }
+
+        .info-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .info-btn {
+            flex: 1;
+            padding: 0.875rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            text-decoration: none;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .info-btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .info-btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .info-btn:active {
+            opacity: 0.8;
+        }
+
+        .search-form {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        input, select {
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 0.875rem 1.5rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 100%;
+        }
+
+        button:active {
+            background: #5568d3;
+            transform: scale(0.98);
+        }
+
+        .clear-btn {
+            background: #f0f0f0;
+            color: #666;
+            margin-top: 1rem;
+        }
+
+        .clear-btn:active {
+            background: #e0e0e0;
+        }
+
+        /* Location button (GPS) */
+        .location-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            cursor: pointer;
+            z-index: 1002;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: all 0.2s;
+        }
+
+        .location-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .location-btn.loading {
+            background: #667eea;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .maplibregl-map {
+            font-family: inherit;
+        }
+
+        .maplibregl-popup-content {
+            margin: 8px 12px;
+            line-height: 1.6;
+        }
+
+        .maplibregl-popup-content h4 {
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+
+        .maplibregl-popup-content p {
+            margin: 4px 0;
+            font-size: 0.9rem;
+        }
+
+        .maplibregl-popup-content a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .maplibregl-popup-content a:hover {
+            text-decoration: underline;
+        }
+
+        /* Custom marker styles */
+        .custom-marker {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            cursor: pointer;
+        }
+
+        /* Map Legend */
+        .map-legend {
+            background: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            line-height: 24px;
+            font-size: 14px;
+        }
+
+        .map-legend h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .map-legend-item {
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .map-legend-item:hover {
+            background: #f0f0f0;
+        }
+
+        .map-legend-item:active {
+            background: #e0e0e0;
+            transform: scale(0.98);
+        }
+
+        .map-legend-color {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            margin-right: 8px;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        /* Results in bottom sheet */
+        .results {
+            margin-top: 1rem;
+        }
+
+        .results-header {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.75rem;
+        }
+
+        .results-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .restaurant-card {
+            background: #f9f9f9;
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid #eee;
+        }
+
+        .restaurant-card:active {
+            background: #f0f0f0;
+        }
+
+        .restaurant-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        .restaurant-rating {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .restaurant-info {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .restaurant-link {
+            display: inline-block;
+            margin-top: 1rem;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .restaurant-link:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        /* Always mobile-optimized */
+        input, select, button {
+            font-size: 16px; /* Prevents zoom on iOS */
+        }
+
+        .restaurant-name {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        .restaurant-info {
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .restaurant-info p {
+            margin: 0.25rem 0;
+        }
+
+        /* Hide desktop-only elements */
+        .desktop-only {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<!-- Mobile-first header -->
+    <header>
+        <div class="header-title">
+            <h1>Tokyo Best Food 2025</h1>
+            <span class="stats-badge">1094 restaurants</span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a href="https://github.com/thebabush/tokyo-best-food-2025" target="_blank" style="color: white; font-size: 1.5rem; text-decoration: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;">
+                <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+            </a>
+            <button class="filter-btn" onclick="toggleFilterDialog()">⚙️</button>
+        </div>
+    </header>
+
+    <!-- Full screen map -->
+    <div id="map"></div>
+
+    <!-- GPS location button -->
+    <button class="location-btn" onclick="getCurrentLocation()" title="Use my location">
+        📍
+    </button>
+
+    <!-- Full screen filter dialog -->
+    <div class="filter-dialog" id="filterDialog">
+        <div class="filter-header">
+            <div class="filter-title">Search & Filters</div>
+            <button class="close-btn" onclick="toggleFilterDialog()">✕</button>
+        </div>
+        <div class="filter-content">
+            <div class="search-form">
+                <div class="form-group">
+                    <label for="query">🔍 Search</label>
+                    <input type="text" id="query" placeholder="Restaurant name, area, or station...">
+                </div>
+                <div class="form-group">
+                    <label for="category">🍜 Category</label>
+                    <select id="category">
+                        <option value="">All Categories</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="min_rating">⭐ Min Rating</label>
+                    <input type="number" id="min_rating" step="0.1" min="0" max="5" placeholder="3.5">
+                </div>
+                <div class="form-group">
+                    <label for="price_range">💰 Price Range</label>
+                    <select id="price_range">
+                        <option value="">Any</option>
+                        <option value="～￥999">～￥999</option>
+                        <option value="￥1,000～￥1,999">￥1,000～￥1,999</option>
+                        <option value="￥3,000～￥3,999">￥3,000～￥3,999</option>
+                        <option value="￥6,000～￥7,999">￥6,000～￥7,999</option>
+                        <option value="￥10,000～￥14,999">￥10,000～￥14,999</option>
+                        <option value="￥15,000～￥19,999">￥15,000～￥19,999</option>
+                        <option value="￥20,000～￥29,999">￥20,000～￥29,999</option>
+                        <option value="￥30,000+">￥30,000+</option>
+                    </select>
+                </div>
+                <button id="clearFilters" class="clear-btn">Clear All Filters</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom sheet for restaurant info -->
+    <div class="info-sheet" id="infoSheet">
+        <div class="sheet-handle"></div>
+        <div class="info-header">
+            <button class="info-close-btn" onclick="closeInfoSheet()">✕</button>
+            <div class="info-name" id="infoName"></div>
+            <div class="info-rating" id="infoRating" style="display: none;"></div>
+        </div>
+        <div class="info-content" id="infoContent">
+            <!-- Restaurant details will be populated here -->
+        </div>
+    </div>
+    <script>
+        // Static site - load all data at startup
+        let allRestaurantsData = [];
+
+        async function loadAllRestaurants() {
+            const response = await fetch('restaurants.json');
+            allRestaurantsData = await response.json();
+            return allRestaurantsData;
+        }
+
+        
+        // Configuration
+        const MAX_RESULTS = 200;  // Maximum number of restaurants to load at once
+        const UPDATE_DELAY = 500; // Debounce delay in milliseconds
+
+        let map;
+        let markersLayer;
+        let userLocationMarker = null;
+        let allRestaurants = [];
+        let updateTimeout = null;
+
+        // Filter dialog controls
+        function toggleFilterDialog() {
+            const dialog = document.getElementById('filterDialog');
+            dialog.classList.toggle('open');
+        }
+
+        // Info sheet controls
+        function showRestaurantInfo(restaurant) {
+            const sheet = document.getElementById('infoSheet');
+            const nameEl = document.getElementById('infoName');
+            const ratingEl = document.getElementById('infoRating');
+            const contentEl = document.getElementById('infoContent');
+
+            // Populate restaurant info
+            nameEl.textContent = restaurant.name || 'Unknown';
+
+            if (restaurant.rating) {
+                ratingEl.textContent = `⭐ ${restaurant.rating}`;
+                ratingEl.style.display = 'inline-block';
+            } else {
+                ratingEl.style.display = 'none';
+            }
+
+            const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${restaurant.lat},${restaurant.lng}`;
+
+            contentEl.innerHTML = `
+                <div class="info-actions" style="margin-top: 0; margin-bottom: 1.5rem;">
+                    ${restaurant.url ? `<a href="${restaurant.url}" target="_blank" class="info-btn info-btn-primary">View on Tabelog</a>` : ''}
+                    <a href="${googleMapsUrl}" target="_blank" class="info-btn info-btn-secondary">Open in Maps</a>
+                </div>
+                <div class="info-details">
+                    ${restaurant.categories ? `
+                        <div class="info-row">
+                            <div class="info-label">Category</div>
+                            <div class="info-value">${restaurant.categories}</div>
+                        </div>
+                    ` : ''}
+                    ${restaurant.address ? `
+                        <div class="info-row">
+                            <div class="info-label">Address</div>
+                            <div class="info-value">${restaurant.address}</div>
+                        </div>
+                    ` : ''}
+                    ${restaurant.station ? `
+                        <div class="info-row">
+                            <div class="info-label">Station</div>
+                            <div class="info-value">${restaurant.station}</div>
+                        </div>
+                    ` : ''}
+                    ${restaurant.price_range ? `
+                        <div class="info-row">
+                            <div class="info-label">Price</div>
+                            <div class="info-value">${restaurant.price_range}</div>
+                        </div>
+                    ` : ''}
+                    ${restaurant.hours ? `
+                        <div class="info-row">
+                            <div class="info-label">Hours</div>
+                            <div class="info-value">${restaurant.hours}</div>
+                        </div>
+                    ` : ''}
+                    ${restaurant.closed ? `
+                        <div class="info-row">
+                            <div class="info-label">Closed</div>
+                            <div class="info-value">${restaurant.closed}</div>
+                        </div>
+                    ` : ''}
+                    ${restaurant.phone ? `
+                        <div class="info-row">
+                            <div class="info-label">Phone</div>
+                            <div class="info-value">${restaurant.phone}</div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            // Show the sheet
+            sheet.classList.add('open');
+        }
+
+        function closeInfoSheet() {
+            const sheet = document.getElementById('infoSheet');
+            sheet.classList.remove('open');
+        }
+
+        // Handle drag on info sheet
+        let isDragging = false;
+        let startY = 0;
+        let currentTranslateY = 0;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const sheet = document.getElementById('infoSheet');
+            const handle = sheet.querySelector('.sheet-handle');
+
+            // Touch events for drag
+            handle.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                startY = e.touches[0].clientY;
+                const transform = window.getComputedStyle(sheet).transform;
+                if (transform !== 'none') {
+                    const matrix = new DOMMatrix(transform);
+                    currentTranslateY = matrix.m42;
+                } else {
+                    currentTranslateY = 0;
+                }
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                const deltaY = e.touches[0].clientY - startY;
+                const newTranslateY = currentTranslateY + deltaY;
+
+                // Only allow dragging down to close
+                if (newTranslateY >= 0) {
+                    sheet.style.transform = `translateY(${newTranslateY}px)`;
+                }
+            });
+
+            document.addEventListener('touchend', (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+
+                // Close if dragged down more than 100px
+                const transform = window.getComputedStyle(sheet).transform;
+                if (transform !== 'none') {
+                    const matrix = new DOMMatrix(transform);
+                    const translateY = matrix.m42;
+
+                    if (translateY > 100) {
+                        sheet.style.transform = '';
+                        closeInfoSheet();
+                    } else {
+                        sheet.style.transform = '';
+                    }
+                }
+            });
+        });
+
+        // GPS location function
+        async function getCurrentLocation() {
+            const btn = document.querySelector('.location-btn');
+
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+
+            // Show loading state
+            btn.classList.add('loading');
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+
+                    // Center map on user location (MapLibre GL uses lng, lat order)
+                    map.flyTo({center: [lng, lat], zoom: 14});
+
+                    // Remove old user location marker if exists
+                    if (userLocationMarker) {
+                        userLocationMarker.remove();
+                    }
+
+                    // Add blue marker for user location
+                    const el = document.createElement('div');
+                    el.className = 'custom-marker';
+                    el.style.backgroundColor = '#4285f4';
+                    el.style.cursor = 'pointer';
+
+                    userLocationMarker = new maplibregl.Marker({element: el})
+                        .setLngLat([lng, lat])
+                        .setPopup(new maplibregl.Popup().setHTML('📍 You are here'))
+                        .addTo(map);
+
+                    // Remove loading state
+                    btn.classList.remove('loading');
+                },
+                (error) => {
+                    console.error('Error getting location:', error);
+                    alert('Unable to get your location. Please enable location services.');
+                    btn.classList.remove('loading');
+                }
+            );
+        }
+
+        async function loadCategories() {
+            try {
+                const response = await fetch('categories.json');
+                const categories = await response.json();
+
+                const categorySelect = document.getElementById('category');
+
+                // Add common categories from Tabelog Hyakumeiten (even if not yet in DB)
+                const commonCategories = [
+                    'ramen', 'sushi', 'soba', 'udon', 'yakitori', 'yakiniku',
+                    'okonomiyaki', 'kaiseki', 'tempura', 'unagi', 'tonkatsu',
+                    'french', 'italian', 'spanish', 'chinese', 'curry',
+                    'izakaya', 'gyoza', 'hamburger', 'cafe', 'bar'
+                ];
+
+                // Merge and deduplicate
+                const allCategories = [...new Set([...categories, ...commonCategories])].sort();
+
+                allCategories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category;
+                    option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+                    categorySelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        }
+
+        // Store markers array
+        let markers = [];
+
+        async function loadRestaurantsInView() {
+            try {
+                if (!map) return;
+
+                const bounds = map.getBounds();
+                const south = bounds.getSouth();
+                const west = bounds.getWest();
+                const north = bounds.getNorth();
+                const east = bounds.getEast();
+
+                // Get filter values
+                const query = document.getElementById('query').value.toLowerCase();
+                const category = document.getElementById('category').value.toLowerCase();
+                const min_rating = parseFloat(document.getElementById('min_rating').value) || 0;
+                const price_range = document.getElementById('price_range').value;
+
+                // Filter loaded data client-side
+                let filtered = allRestaurantsData.filter(r => {
+                    // Viewport bounds filter
+                    if (r.lat < south || r.lat > north || r.lng < west || r.lng > east) {
+                        return false;
+                    }
+                    // Text search filter
+                    if (query) {
+                        const searchText = `${r.name} ${r.address || ''} ${r.station || ''}`.toLowerCase();
+                        if (!searchText.includes(query)) return false;
+                    }
+                    // Category filter
+                    if (category && (!r.categories || !r.categories.toLowerCase().includes(category))) {
+                        return false;
+                    }
+                    // Rating filter
+                    if (min_rating > 0 && (!r.rating || r.rating < min_rating)) {
+                        return false;
+                    }
+                    // Price range filter
+                    if (price_range && (!r.price_range || !r.price_range.includes(price_range))) {
+                        return false;
+                    }
+                    return true;
+                });
+
+                // Limit results
+                filtered = filtered.slice(0, MAX_RESULTS);
+
+                // Update allRestaurants for compatibility
+                allRestaurants = filtered;
+
+                // Clear existing markers
+                markers.forEach(m => m.remove());
+                markers = [];
+
+                // Add markers for each restaurant
+                filtered.forEach(restaurant => {
+                    // Determine marker color based on rating
+                    let color = '#808080';
+                    if (restaurant.rating >= 3.8) color = '#e74c3c';
+                    else if (restaurant.rating >= 3.5) color = '#f39c12';
+                    else if (restaurant.rating >= 3.0) color = '#3498db';
+
+                    // Create marker element
+                    const el = document.createElement('div');
+                    el.className = 'custom-marker';
+                    el.style.backgroundColor = color;
+                    el.style.cursor = 'pointer';
+
+                    // Create MapLibre marker
+                    const marker = new maplibregl.Marker({element: el})
+                        .setLngLat([restaurant.lng, restaurant.lat])
+                        .addTo(map);
+
+                    // Add click handler
+                    el.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        showRestaurantInfo(restaurant);
+                    });
+
+                    markers.push(marker);
+                });
+
+                console.log(`Loaded ${filtered.length} restaurants in current view`);
+            } catch (error) {
+                console.error('Error loading restaurants:', error);
+            }
+        }
+
+        function debouncedLoadRestaurants() {
+            if (updateTimeout) {
+                clearTimeout(updateTimeout);
+            }
+            updateTimeout = setTimeout(loadRestaurantsInView, UPDATE_DELAY);
+        }
+
+        async function loadMap() {
+            try {
+                // Initialize MapLibre GL map with simple basemap (English labels via OSM name:en tags)
+                map = new maplibregl.Map({
+                    container: 'map',
+                    center: [139.6503, 35.6762], // lng, lat order for MapLibre
+                    zoom: 11,
+                    style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json'  // CartoDB Voyager
+                });
+
+                // Add navigation controls
+                map.addControl(new maplibregl.NavigationControl());
+
+                // Wait for map to load
+                map.on('load', async () => {
+                    // Load all restaurant data first
+                    await loadAllRestaurants();
+
+                    // Load initial restaurants
+                    await loadRestaurantsInView();
+
+                    // Add event listeners for map movement
+                    map.on('moveend', debouncedLoadRestaurants);
+                    map.on('zoomend', debouncedLoadRestaurants);
+
+                    // Add clickable legend
+                    addLegend();
+
+                    // Close info sheet when clicking on map
+                    map.on('click', closeInfoSheet);
+                });
+
+            } catch (error) {
+                console.error('Error loading map:', error);
+                document.getElementById('map').innerHTML = '<p style="padding: 2rem; text-align: center; color: #e74c3c;">Error loading map. Please refresh the page.</p>';
+            }
+        }
+
+        // Add legend control
+        function addLegend() {
+            const legendEl = document.createElement('div');
+            legendEl.className = 'map-legend maplibregl-ctrl';
+            legendEl.style.cssText = 'position: absolute; bottom: 30px; left: 10px; z-index: 1;';
+            legendEl.innerHTML = `
+                <h4>Rating</h4>
+                <div class="map-legend-item" onclick="filterByRating(3.8)" style="cursor: pointer;">
+                    <div class="map-legend-color" style="background-color: #e74c3c;"></div>
+                    <span>3.8+ Excellent</span>
+                </div>
+                <div class="map-legend-item" onclick="filterByRating(3.5)" style="cursor: pointer;">
+                    <div class="map-legend-color" style="background-color: #f39c12;"></div>
+                    <span>3.5+ Very Good</span>
+                </div>
+                <div class="map-legend-item" onclick="filterByRating(3.0)" style="cursor: pointer;">
+                    <div class="map-legend-color" style="background-color: #3498db;"></div>
+                    <span>3.0+ Good</span>
+                </div>
+                <div class="map-legend-item" onclick="filterByRating(0)" style="cursor: pointer;">
+                    <div class="map-legend-color" style="background-color: #808080;"></div>
+                    <span>All Ratings</span>
+                </div>
+            `;
+            document.getElementById('map').appendChild(legendEl);
+        }
+
+        // Quick filter by rating from legend
+        function filterByRating(minRating) {
+            // Update the min rating filter
+            const minRatingInput = document.getElementById('min_rating');
+            if (minRating === 0) {
+                minRatingInput.value = '';
+            } else {
+                minRatingInput.value = minRating;
+            }
+
+            // Reload restaurants with the new filter
+            loadRestaurantsInView();
+        }
+
+        // Debounce function for text inputs
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Apply filters automatically
+        async function applyFilters() {
+            await loadRestaurantsInView();
+        }
+
+        // Debounced version for text inputs (300ms delay)
+        const debouncedApplyFilters = debounce(applyFilters, 300);
+
+        // Clear all filters
+        function clearAllFilters() {
+            // Clear all input values
+            document.getElementById('query').value = '';
+            document.getElementById('min_rating').value = '';
+            document.getElementById('category').value = '';
+            document.getElementById('price_range').value = '';
+
+            // Apply filters to refresh the map
+            applyFilters();
+        }
+
+        // Setup automatic filter listeners
+        function setupFilterListeners() {
+            // Text input with debounce
+            document.getElementById('query').addEventListener('input', debouncedApplyFilters);
+
+            // Number input with debounce
+            document.getElementById('min_rating').addEventListener('input', debouncedApplyFilters);
+
+            // Select dropdowns (no debounce needed)
+            document.getElementById('category').addEventListener('change', applyFilters);
+            document.getElementById('price_range').addEventListener('change', applyFilters);
+
+            // Clear button
+            document.getElementById('clearFilters').addEventListener('click', clearAllFilters);
+        }
+
+
+        // Load categories and map on page load
+        window.addEventListener('load', () => {
+            loadCategories();
+            loadMap();
+            setupFilterListeners();
+        });
+    </script>
+</body>
+</html>
